@@ -27,7 +27,14 @@ if(!defined('DOKU_INC')) define('DOKU_INC',realpath(dirname(__FILE__).'/../../')
 if(!defined('DOKU_PLUGIN')) define('DOKU_PLUGIN',DOKU_INC.'lib/plugins/');
 require_once(DOKU_PLUGIN.'syntax.php');
 require_once(DOKU_INC.'inc/auth.php');
-require_once(dirname(__file__).'/recaptchalib.php');
+require_once(dirname(__file__).'/ReCaptcha/autoload.php');
+
+function eregi($pattern,$str) {
+	return preg_match('/'.$pattern.'/i',$str)==1;
+}
+function ereg($pattern,$str) {
+	return preg_match('/'.$pattern.'/',$str)==1;
+}
 
 class syntax_plugin_moderncontact extends DokuWiki_Syntax_Plugin {
 
@@ -52,6 +59,7 @@ class syntax_plugin_moderncontact extends DokuWiki_Syntax_Plugin {
 			'url'	 => 'https://github.com/marvinrabe/dokuwiki-contact',
 		);
 	}
+
 
 	/**
 	 * What kind of syntax are we?
@@ -84,7 +92,7 @@ class syntax_plugin_moderncontact extends DokuWiki_Syntax_Plugin {
 	/**
 	 * Handle the match.
 	 */
-	public function handle($match, $state, $pos, &$handler){
+	public function handle($match, $state, $pos, Doku_Handler $handler){
 		if (isset($_REQUEST['comment']))
 		    return false;
 
@@ -104,7 +112,7 @@ class syntax_plugin_moderncontact extends DokuWiki_Syntax_Plugin {
 	/**
 	 * Create output.
 	 */
-	public function render($mode, &$renderer, $data) {
+	public function render($mode, Doku_Renderer $renderer, $data) {
 		if($mode == 'xhtml'){
 			// Define unique form id
 			$this->formId = syntax_plugin_moderncontact::$lastFormId++;
@@ -155,12 +163,15 @@ class syntax_plugin_moderncontact extends DokuWiki_Syntax_Plugin {
 
 		// checks recaptcha answer
 		if($conf['plugin']['moderncontact']['captcha'] == 1 && $captcha == true) {
-			$resp = recaptcha_check_answer ($conf['plugin']['moderncontact']['recaptchasecret'],
-						$_SERVER["REMOTE_ADDR"],
-						$_POST["recaptcha_challenge_field"],
-						$_POST["recaptcha_response_field"]);
-			if (!$resp->is_valid){
-				$this->_set_error('captcha', $lang["captcha"]);
+
+			$recaptcha = new \ReCaptcha\ReCaptcha($conf['plugin']['moderncontact']['recaptchasecret']);
+			$resp = $recaptcha->setExpectedHostname('nosugga.com')
+					  ->verify($_POST['g-recaptcha-response'], $_SERVER['REMOTE_ADDR']);
+			if ($resp->isSuccess()) {
+			    // Verified!
+			} else {
+				$errors = $resp->getErrorCodes();
+				$this->_set_error('captcha', $errors);
 			}
 		}
 
@@ -225,14 +236,14 @@ class syntax_plugin_moderncontact extends DokuWiki_Syntax_Plugin {
 		$email_array = explode("@", $email);
 		$local_array = explode(".", $email_array[0]);
 		for ($i = 0; $i < sizeof($local_array); $i++) {
-			if (!ereg("^(([A-Za-z0-9!#$%&'*+/=?^_`{|}~-][A-Za-z0-9!#$%&'*+/=?^_`{|}~\.-]{0,63})|(\"[^(\\|\")]{0,62}\"))$",
+			if (!ereg("^(([A-Za-z0-9!#$%&'*+\\/=?^_`{|}~-][A-Za-z0-9!#$%&'*+\\/=?^_`{|}~\\.-]{0,63})|(\"[^(\\|\")]{0,62}\"))$",
 				$local_array[$i])) {
 					return false;
 			}
 		}
 		// Check if domain is IP. If not, 
 		// it should be valid domain name
-		if (!ereg("^\[?[0-9\.]+\]?$", $email_array[1])) {
+		if (!ereg("^\\[?[0-9\.]+\\]?$", $email_array[1])) {
 			$domain_array = explode(".", $email_array[1]);
 			if (sizeof($domain_array) < 2) {
 				return false; // Not enough parts to domain
@@ -277,10 +288,16 @@ class syntax_plugin_moderncontact extends DokuWiki_Syntax_Plugin {
 			if($this->errorFlags["captcha"]) {
 				$ret .= '<style>#recaptcha_response_field { border: 1px solid #e18484 !important; }</style>';
 			}
+
+
+
 			$ret .= "<tr><td colspan=\"2\">"
 			. "<script type=\"text/javascript\">var RecaptchaOptions = { lang : '".$conf['lang']."', "
 			. "theme : '".$conf['plugin']['moderncontact']['recaptchalayout']."' };</script>"
-			. recaptcha_get_html($conf['plugin']['moderncontact']['recaptchakey'])."</td></tr>";
+			. '<script src="https://www.google.com/recaptcha/api.js" async defer></script>'
+			. '<div class="g-recaptcha" data-sitekey="'.$conf['plugin']['moderncontact']['recaptchakey'].'"></div>'
+			;
+
 			syntax_plugin_moderncontact::$captcha = true;
 		}
 
