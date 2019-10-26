@@ -1,5 +1,6 @@
 h1. Modern Contact Plugin
 
+p. Updated to php7, dokuwiki 2018-04-22b, recaptcha php v1.2.3
 p. In the search for a contact form for Dokuwiki I only found that of Bob Baddeley (http://bobbaddeley.com/). It is quite good, although a bit outdated.
 
 h2. Features
